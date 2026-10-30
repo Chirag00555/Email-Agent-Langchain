@@ -24,7 +24,7 @@ class AccountScanner:
     def __init__(
         self,
         account_id: str,
-        account_type: str = "transactions",
+        account_type: Optional[str] = None,
         email_address: Optional[str] = None,
         settings: Optional[Settings] = None,
         db: Optional[DatabaseManager] = None,
@@ -32,20 +32,44 @@ class AccountScanner:
         extractor: Optional[EmailExtractor] = None,
     ) -> None:
         self.account_id = account_id
-        self.account_type = account_type
         self.settings = settings or get_settings()
+
+        # Infer account type from settings if not explicitly given
+        if account_type is None:
+            if account_id == "account_1":
+                self.account_type = self.settings.account_1_type
+            elif account_id == "account_2":
+                self.account_type = self.settings.account_2_type
+            elif account_id == "account_3":
+                self.account_type = self.settings.account_3_type
+            else:
+                self.account_type = "jobs"
+        else:
+            self.account_type = account_type
+
+        # Infer email from settings if not explicitly given
+        if email_address is None:
+            if account_id == "account_1":
+                self.email_address = self.settings.account_1_email
+            elif account_id == "account_2":
+                self.email_address = self.settings.account_2_email
+            elif account_id == "account_3":
+                self.email_address = self.settings.account_3_email
+            else:
+                self.email_address = f"{account_id}@local"
+        else:
+            self.email_address = email_address
+
         self.db = db or DatabaseManager(db_path=self.settings.database_path)
         self.gmail_client = gmail_client or GmailClient(account_id=account_id, settings=self.settings)
         self.extractor = extractor or EmailExtractor(settings=self.settings)
-        self.email_address = email_address
 
-        # Ensure account is registered in DB
+        # Ensure account is registered in DB with current configuration
         self._ensure_account_registered()
 
     def _ensure_account_registered(self) -> None:
-        """Register account in SQLite if not already present."""
-        existing = self.db.get_account(self.account_id)
-        email = self.email_address or (existing.email if existing else f"{self.account_id}@local")
+        """Register or update account in SQLite with correct email and type."""
+        email = self.email_address or f"{self.account_id}@local"
         self.db.upsert_account(
             account_id=self.account_id,
             email=email,
@@ -198,3 +222,29 @@ class AccountScanner:
             self.db.update_checkpoint(self.account_id, last_scan_timestamp=scan_start_time)
 
         return stats
+
+
+def scan_all_accounts(
+    settings: Optional[Settings] = None,
+    max_messages_per_account: int = 15,
+    dry_run: bool = False,
+) -> List[Dict[str, Any]]:
+    """Scan all configured Gmail accounts sequentially."""
+    active_settings = settings or get_settings()
+    accounts = active_settings.get_configured_accounts()
+    results = []
+
+    for acct in accounts:
+        account_id = acct["account_id"]
+        logger.info(f"Starting scan for {account_id} ({acct['type']})...")
+        scanner = AccountScanner(
+            account_id=account_id,
+            account_type=acct["type"],
+            email_address=acct["email"],
+            settings=active_settings,
+        )
+        res = scanner.scan(max_messages=max_messages_per_account, dry_run=dry_run)
+        results.append(res)
+
+    return results
+

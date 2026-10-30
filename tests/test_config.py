@@ -38,3 +38,15 @@ def test_model_override():
     """Verify the Groq model name can be customized."""
     settings = Settings(groq_model="llama-3.3-70b-versatile")
     assert settings.groq_model == "llama-3.3-70b-versatile"
+
+
+def test_configured_account_roles():
+    """Verify Account 2 is transactions and Accounts 1 & 3 are jobs."""
+    settings = Settings()
+    accounts = settings.get_configured_accounts()
+    assert len(accounts) == 3
+    acct_types = {a["account_id"]: a["type"] for a in accounts}
+    assert acct_types["account_1"] == "jobs"
+    assert acct_types["account_2"] == "transactions"
+    assert acct_types["account_3"] == "jobs"
+

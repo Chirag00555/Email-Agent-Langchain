@@ -63,13 +63,13 @@ class Settings(BaseSettings):
     )
 
     # Account Specifics
-    account_1_email: Optional[str] = Field(default=None)
-    account_1_type: str = Field(default="transactions")
+    account_1_email: Optional[str] = Field(default="jainchirag.cj555@gmail.com")
+    account_1_type: str = Field(default="jobs")
 
-    account_2_email: Optional[str] = Field(default=None)
-    account_2_type: str = Field(default="jobs")
+    account_2_email: Optional[str] = Field(default="chirag.cj555@gmail.com")
+    account_2_type: str = Field(default="transactions")
 
-    account_3_email: Optional[str] = Field(default=None)
+    account_3_email: Optional[str] = Field(default="chirag.work555@gmail.com")
     account_3_type: str = Field(default="jobs")
 
     def ensure_directories(self) -> None:
@@ -78,15 +78,12 @@ class Settings(BaseSettings):
         self.tokens_dir.mkdir(parents=True, exist_ok=True)
 
     def get_configured_accounts(self) -> List[Dict[str, str]]:
-        """Return list of configured non-empty accounts with their assigned types."""
-        accounts = []
-        if self.account_1_email:
-            accounts.append({"account_id": "account_1", "email": self.account_1_email, "type": self.account_1_type})
-        if self.account_2_email:
-            accounts.append({"account_id": "account_2", "email": self.account_2_email, "type": self.account_2_type})
-        if self.account_3_email:
-            accounts.append({"account_id": "account_3", "email": self.account_3_email, "type": self.account_3_type})
-        return accounts
+        """Return list of configured accounts with their assigned types."""
+        return [
+            {"account_id": "account_1", "email": self.account_1_email or "account_1@local", "type": self.account_1_type},
+            {"account_id": "account_2", "email": self.account_2_email or "account_2@local", "type": self.account_2_type},
+            {"account_id": "account_3", "email": self.account_3_email or "account_3@local", "type": self.account_3_type},
+        ]
 
     def sanitized_summary(self) -> Dict[str, str]:
         """Return safe, non-sensitive summary of settings for operational logging."""
