@@ -247,6 +247,9 @@ class DatabaseManager:
         )
         VALUES (?, ?, ?, ?, ?, ?, ?, ?)
         """
+        classification_val = (
+            classification.value if hasattr(classification, "value") else str(classification)
+        )
         with self.get_connection() as conn:
             conn.execute(
                 sql,
@@ -257,10 +260,15 @@ class DatabaseManager:
                     received_at,
                     subject,
                     sender,
-                    classification.value,
+                    classification_val,
                     now,
                 ),
             )
+        enum_class = (
+            classification
+            if isinstance(classification, MessageClassification)
+            else MessageClassification(classification_val)
+        )
         return ProcessedMessageRecord(
             account_id=account_id,
             message_id=message_id,
@@ -268,7 +276,7 @@ class DatabaseManager:
             received_at=received_at,
             subject=subject,
             sender=sender,
-            classification=classification,
+            classification=enum_class,
             processed_at=now,
         )
 
