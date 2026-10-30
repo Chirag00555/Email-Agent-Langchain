@@ -77,7 +77,13 @@ class AccountScanner:
         )
 
     def build_query(self, custom_query: Optional[str] = None) -> str:
-        """Construct broad Gmail search query with checkpoint boundary."""
+        """Construct broad Gmail search query with checkpoint boundary and safety overlap.
+
+        Resilience features:
+        1. Resumes from the account's last_scan_timestamp, NOT a fixed 24-hour window.
+        2. Subtracts scan_lookback_overlap_hours (default: 2h) for safety.
+        3. Supports missed-run catch-up if the machine was off for multiple days.
+        """
         if custom_query:
             return custom_query
 
@@ -92,13 +98,26 @@ class AccountScanner:
         # Checkpoint date filter if previous scan timestamp exists
         account = self.db.get_account(self.account_id)
         date_filter = ""
+
         if account and account.last_scan_timestamp:
             try:
-                # Format: after:YYYY/MM/DD
+                # Parse last scan time (handling ISO format)
                 dt = datetime.fromisoformat(account.last_scan_timestamp.replace("Z", "+00:00"))
-                date_filter = f"after:{dt.strftime('%Y/%m/%d')}"
-            except Exception:
-                pass
+                # Apply safety overlap (subtract overlap hours)
+                overlap_seconds = self.settings.scan_lookback_overlap_hours * 3600
+                overlap_dt = datetime.fromtimestamp(dt.timestamp() - overlap_seconds, tz=timezone.utc)
+                # Gmail API supports epoch seconds in 'after:' queries (e.g. after:1729000000)
+                # or date format after:YYYY/MM/DD. Using epoch seconds gives exact to-the-second precision!
+                epoch_sec = int(overlap_dt.timestamp())
+                date_filter = f"after:{epoch_sec}"
+            except Exception as e:
+                logger.warning(f"Could not compute exact epoch filter for {self.account_id}: {e}")
+                # Fallback to date string if timestamp conversion failed
+                try:
+                    dt = datetime.fromisoformat(account.last_scan_timestamp.replace("Z", "+00:00"))
+                    date_filter = f"after:{dt.strftime('%Y/%m/%d')}"
+                except Exception:
+                    pass
 
         parts = [p for p in [base_filter, date_filter] if p]
         return " ".join(parts)
@@ -178,9 +197,8 @@ class AccountScanner:
                     account_type=self.account_type,
                 )
 
-                # 5. Persist to SQLite
-                # Record in processed_messages (header metadata only; NO BODY STORED)
-                self.db.record_processed_message(
+                # 5. Persist to SQLite atomically (Header + Extracted record in single transaction)
+                self.db.save_extracted_message(
                     account_id=self.account_id,
                     message_id=message_id,
                     thread_id=thread_id,
@@ -188,28 +206,16 @@ class AccountScanner:
                     subject=subject,
                     sender=sender,
                     classification=analysis.classification,
+                    transaction=analysis.transaction,
+                    job_event=analysis.job_event,
+                    category_hint="uncategorized",
                 )
                 stats["newly_processed"] += 1
 
                 if analysis.classification == MessageClassification.TRANSACTION and analysis.transaction:
-                    self.db.create_transaction(
-                        account_id=self.account_id,
-                        message_id=message_id,
-                        extraction=analysis.transaction,
-                        category_hint="uncategorized",
-                        review_status=ReviewStatus.NEEDS_REVIEW,
-                    )
                     stats["transactions_created"] += 1
-
                 elif analysis.classification == MessageClassification.JOB and analysis.job_event:
-                    self.db.create_job_event(
-                        account_id=self.account_id,
-                        message_id=message_id,
-                        extraction=analysis.job_event,
-                        review_status=ReviewStatus.NEEDS_REVIEW,
-                    )
                     stats["job_events_created"] += 1
-
                 else:
                     stats["ignored_count"] += 1
 

@@ -280,6 +280,122 @@ class DatabaseManager:
             processed_at=now,
         )
 
+    def save_extracted_message(
+        self,
+        account_id: str,
+        message_id: str,
+        thread_id: Optional[str],
+        received_at: Optional[str],
+        subject: Optional[str],
+        sender: Optional[str],
+        classification: MessageClassification,
+        transaction: Optional[TransactionExtraction] = None,
+        job_event: Optional[JobEventExtraction] = None,
+        category_hint: str = "uncategorized",
+    ) -> None:
+        """Atomically persist a message header and its extracted child record.
+
+        If either insert fails, the transaction is completely rolled back, preventing
+        orphan records or premature deduplication markers.
+        """
+        now = current_iso_timestamp()
+        classification_val = (
+            classification.value if hasattr(classification, "value") else str(classification)
+        )
+
+        with self.get_connection() as conn:
+            # 1. Insert header
+            conn.execute(
+                """
+                INSERT INTO processed_messages (
+                    account_id, message_id, thread_id, received_at,
+                    subject, sender, classification, processed_at
+                )
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                """,
+                (
+                    account_id,
+                    message_id,
+                    thread_id,
+                    received_at,
+                    subject,
+                    sender,
+                    classification_val,
+                    now,
+                ),
+            )
+
+            # 2. Insert transaction child record if applicable
+            if classification == MessageClassification.TRANSACTION and transaction:
+                effective_review = (
+                    ReviewStatus.NEEDS_REVIEW
+                    if transaction.needs_review or transaction.confidence_score < 0.8
+                    else ReviewStatus.NEEDS_REVIEW
+                )
+                conn.execute(
+                    """
+                    INSERT INTO transactions (
+                        account_id, message_id, transaction_date, merchant,
+                        amount, currency, card_last_four, transaction_type,
+                        category_hint, review_status, confidence_score,
+                        uncertainty_notes, created_at, updated_at
+                    )
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    """,
+                    (
+                        account_id,
+                        message_id,
+                        transaction.transaction_date,
+                        transaction.merchant,
+                        transaction.amount,
+                        transaction.currency or "USD",
+                        transaction.card_last_four,
+                        transaction.transaction_type.value,
+                        category_hint,
+                        effective_review.value,
+                        transaction.confidence_score,
+                        transaction.uncertainty_notes,
+                        now,
+                        now,
+                    ),
+                )
+
+            # 3. Insert job event child record if applicable
+            elif classification == MessageClassification.JOB and job_event:
+                effective_review = (
+                    ReviewStatus.NEEDS_REVIEW
+                    if job_event.needs_review or job_event.confidence_score < 0.8
+                    else ReviewStatus.NEEDS_REVIEW
+                )
+                conn.execute(
+                    """
+                    INSERT INTO job_events (
+                        account_id, message_id, company, role_title,
+                        event_type, interview_datetime, timezone,
+                        meeting_link, next_step, review_status,
+                        confidence_score, uncertainty_notes,
+                        created_at, updated_at
+                    )
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    """,
+                    (
+                        account_id,
+                        message_id,
+                        job_event.company,
+                        job_event.role_title,
+                        job_event.event_type.value,
+                        job_event.interview_datetime,
+                        job_event.timezone,
+                        job_event.meeting_link,
+                        job_event.next_step,
+                        effective_review.value,
+                        job_event.confidence_score,
+                        job_event.uncertainty_notes,
+                        now,
+                        now,
+                    ),
+                )
+
     # ==========================================================================
     # Transactions Operations
     # ==========================================================================
