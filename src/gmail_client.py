@@ -186,9 +186,11 @@ class GmailClient:
 
     @staticmethod
     def _clean_html(raw_html: str) -> str:
-        """Convert HTML tags into clean, normalized plain text."""
+        """Convert HTML tags into clean, normalized plain text, stripping scripts/styles."""
+        # Strip script, style, and head blocks including their contents
+        text = re.sub(r"<(?:script|style|head)[^>]*>.*?</(?:script|style|head)>", " ", raw_html, flags=re.DOTALL | re.IGNORECASE)
         # Replace line breaks and block tags with newlines
-        text = re.sub(r"<(?:br|p|div|tr|h\d)[\s/>]", "\n", raw_html, flags=re.IGNORECASE)
+        text = re.sub(r"<(?:br|p|div|tr|h\d)[\s/>]", "\n", text, flags=re.IGNORECASE)
         # Remove remaining tags
         text = re.sub(r"<[^>]+>", " ", text)
         # Decode HTML entities (e.g., &amp;, &#39;)

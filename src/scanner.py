@@ -1,6 +1,7 @@
 """Scanner module: orchestrates Gmail retrieval, LangChain extraction, and SQLite persistence."""
 
 import logging
+import time
 from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional
 
@@ -218,6 +219,9 @@ class AccountScanner:
                     stats["job_events_created"] += 1
                 else:
                     stats["ignored_count"] += 1
+
+                # Polite delay between messages to respect free-tier TPM limits
+                time.sleep(1.0)
 
             except Exception as e:
                 stats["errors"] += 1

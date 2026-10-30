@@ -113,13 +113,19 @@ class EmailExtractor:
         date: str = "",
         account_type: str = "general",
     ) -> EmailAnalysisResult:
-        """Run classification and extraction over an email text."""
+        """Run classification and extraction over an email text with safe token bounds."""
+        # Cap body to ~3500 characters (~800 tokens) to strictly prevent Groq 8,000 TPM limits.
+        # Financial alerts and interview invitations always present essential facts at the top.
+        clean_body = (body or "").strip()
+        if len(clean_body) > 3500:
+            clean_body = clean_body[:3500] + "\n\n...[Remaining email body truncated for length]..."
+
         result: EmailAnalysisResult = self.structured_chain.invoke({
             "account_type": account_type,
-            "subject": subject or "",
-            "sender": sender or "",
+            "subject": (subject or "")[:250],
+            "sender": (sender or "")[:200],
             "date": date or "",
-            "body": body or "",
+            "body": clean_body,
         })
 
         # Post-validation sanity checks to ensure integrity
