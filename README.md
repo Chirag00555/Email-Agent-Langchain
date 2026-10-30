@@ -1,107 +1,175 @@
 # Personal Gmail Analysis Assistant
 
-A controlled, privacy-focused assistant built with Python, LangChain, Groq, SQLite, and Streamlit to scan and analyze credit-card transaction alerts and job hunting correspondence across personal Gmail accounts.
+A private, controlled personal email intelligence system built with **Python**, **LangChain**, **Groq**, **SQLite**, and **Streamlit** to scan three personal Gmail accounts:
+- **Account 2** (`chirag.cj555@gmail.com`): Dedicated to credit-card transaction alerts and purchase notices.
+- **Account 1** (`jainchirag.cj555@gmail.com`) & **Account 3** (`chirag.work555@gmail.com`): Dedicated to job hunting, application confirmations, and interview scheduling.
 
 ---
 
-## Architecture Principles
+## Core Architecture & Privacy Principles
 
-1. **Strictly Read-Only**: Strictly uses `https://www.googleapis.com/auth/gmail.readonly`. The application never writes, sends, modifies, archives, or deletes emails.
-2. **Privacy First**: Raw email bodies are processed transiently in memory for classification and extraction; they are **never** stored in the SQLite database or logged.
-3. **Controlled LangChain Extraction**: Uses deterministic LangChain chains with Groq (`openai/gpt-oss-120b` or configurable models) and Pydantic validation rather than unconstrained autonomous agents.
-4. **Idempotent Ingestion**: Pre-filtering deduplication against SQLite `(account_id, message_id)` composite keys prevents duplicate LLM calls and duplicate insertions.
-5. **Decoupled Architecture**: Scanning is executed via independent CLI/scheduler scripts, completely decoupled from the Streamlit UI dashboard.
+1. **Strictly Read-Only**: Utilizes `https://www.googleapis.com/auth/gmail.readonly`. The application has zero permissions to send, modify, label, archive, or delete any email.
+2. **Zero Body Storage**: Raw email bodies exist transiently in memory during extraction and are discarded—**never** stored in SQLite or written to logs.
+3. **Controlled LangChain Pipeline**: Deterministic Prompt Template $\rightarrow$ Groq LLM (`openai/gpt-oss-120b` or configurable model) $\rightarrow$ Pydantic structured output. No autonomous or unconstrained agent actions.
+4. **Idempotent Ingestion & Deduplication**: SQLite composite primary key `(account_id, message_id)` guarantees that candidate emails are checked before invoking Groq. Overlapping scans produce zero duplicate API calls and zero duplicate rows.
+5. **Resilient Incremental Checkpointing**: Maintains a separate checkpoint timestamp for each account with a 2-hour safety overlap. If the computer is powered off or sleeping during the scheduled run, the next scan automatically catches up from the last successful checkpoint.
+6. **Decoupled Architecture**: Ingestion runs headlessly via Windows Task Scheduler; the Streamlit UI runs independently for viewing, reporting, and category curation.
 
 ---
 
-## Directory Structure
+## Directory Layout
 
 ```text
 Email Agent/
-├── app.py                     # Streamlit local dashboard (Transactions, Reports, Jobs)
-├── credentials.json           # Google Cloud Desktop OAuth Client secret (Git-ignored)
-├── .env                       # Local secrets & API keys (Git-ignored)
-├── .env.example               # Environment variable template
-├── .gitignore                 # Strict ignore rules for keys, tokens, and data
-├── requirements.txt           # Project dependencies
-├── README.md                  # Project documentation
+├── app.py                            # Streamlit interactive local dashboard
+├── credentials.json                  # Google Cloud Desktop OAuth Client secret (Git-ignored)
+├── .env                              # Local secrets & API keys (Git-ignored)
+├── .env.example                      # Environment variable template
+├── .gitignore                        # Git exclusion rules for keys, tokens, and data
+├── requirements.txt                  # Pinned dependencies
+├── README.md                         # Project documentation
 ├── scripts/
-│   ├── auth_and_test_gmail.py # Interactive CLI to authorize Gmail accounts
-│   ├── demo_sample_processor.py # Test processor on synthetic fixtures
-│   └── run_scan.py            # CLI scanner to ingest and extract emails
+│   ├── auth_and_test_gmail.py        # Interactive CLI to authorize Gmail accounts
+│   ├── backup_db.py                  # Database online backup & disaster recovery
+│   ├── demo_sample_processor.py      # Synthetic test email processor
+│   ├── remove_windows_scheduler.ps1  # Script to unregister scheduled scan task
+│   ├── revoke_access.py              # Server-side & local OAuth token revocation
+│   ├── run_scan.py                   # On-demand scanner CLI (supports --all & --dry-run)
+│   ├── scheduled_scan.py             # Headless runner for Windows Task Scheduler
+│   └── setup_windows_scheduler.ps1   # PowerShell automation for nightly 10:00 PM scan
 ├── src/
 │   ├── __init__.py
-│   ├── config.py              # Centralized configuration & secrets hygiene
-│   ├── db.py                  # SQLite schema, deduplication, and CRUD layer
-│   ├── extractor.py           # LangChain + Groq structured extraction pipeline
-│   ├── gmail_client.py        # Read-only Gmail API client & MIME parser
-│   ├── models.py              # Pydantic schemas (Transactions, Jobs, Enums)
-│   └── scanner.py             # Orchestrates ingestion, deduplication & DB storage
+│   ├── config.py                     # Centralized Pydantic settings & secrets hygiene
+│   ├── db.py                         # SQLite schema, atomic persistence, & CRUD layer
+│   ├── extractor.py                  # LangChain + Groq structured extraction pipeline
+│   ├── gmail_client.py               # Read-only Gmail API client & MIME parser
+│   ├── logger.py                     # Sanitized operational logging to logs/scanner.log
+│   ├── models.py                     # Pydantic schemas (Transactions, Jobs, Enums)
+│   └── scanner.py                    # Orchestrates ingestion, overlap & DB storage
 ├── tests/
-│   ├── __init__.py
-│   ├── fixtures/
-│   │   └── sample_emails.py   # Synthetic test email fixtures
-│   ├── test_config.py         # Config & secrets tests
-│   ├── test_db.py             # SQLite schema, deduplication & CRUD tests
-│   ├── test_extractor.py      # LangChain extraction tests
-│   ├── test_gmail.py          # Read-only scope & MIME parser tests
-│   ├── test_scanner.py        # End-to-end scanner & retry tests
-│   └── test_ui.py             # Dashboard helper & formatting tests
-├── tokens/                    # Per-account OAuth tokens (Git-ignored)
-└── data/                      # Local SQLite database (Git-ignored)
+│   ├── fixtures/sample_emails.py     # Synthetic test email fixtures
+│   ├── test_backup_and_revoke.py     # Backup & revocation tests
+│   ├── test_checkpoint_recovery.py   # Overlap, catchup & retry tests
+│   ├── test_config.py                # Configuration & secret masking tests
+│   ├── test_db.py                    # SQLite schema, deduplication & CRUD tests
+│   ├── test_extractor.py             # LangChain extraction & validation tests
+│   ├── test_gmail.py                 # Read-only scope & MIME parser tests
+│   ├── test_logger.py                # Sanitized operational logging tests
+│   ├── test_multi_account.py         # Multi-account separation & isolation tests
+│   ├── test_scanner.py               # Integration & retry tests
+│   └── test_ui.py                    # Streamlit formatting & category tests
+├── tokens/                           # Per-account OAuth tokens (Git-ignored)
+├── logs/                             # Rotating operational logs (Git-ignored)
+└── data/                             # Local SQLite database (Git-ignored)
 ```
 
 ---
 
-## Setup & Usage Instructions
+## Setup & Operation Runbook
 
-### 1. Environment & Dependencies
+### 1. Environment & Setup
 
 ```powershell
 # Create and activate virtual environment
 python -m venv .venv
 .\.venv\Scripts\Activate.ps1
 
-# Install pinned dependencies
+# Install dependencies
 pip install -r requirements.txt
 ```
 
-### 2. Configure Environment
+### 2. Configure Credentials
 
-Copy `.env.example` to `.env` and fill in:
-- `GROQ_API_KEY`: Your Groq API key from [Groq Console](https://console.groq.com).
-- `GROQ_MODEL`: `openai/gpt-oss-120b` (default).
+1. Copy `.env.example` to `.env` and set your `GROQ_API_KEY`:
+   ```powershell
+   Copy-Item .env.example .env
+   ```
+2. Download your Google Cloud Desktop OAuth Client JSON as `credentials.json` in the root folder.
+3. Authorize each account:
+   ```powershell
+   python scripts\auth_and_test_gmail.py --account account_1
+   python scripts\auth_and_test_gmail.py --account account_2
+   python scripts\auth_and_test_gmail.py --account account_3
+   ```
 
-### 3. Connect Gmail Account
+---
 
-Place `credentials.json` (from Google Cloud Console) in the project root, then run:
+### 3. Running Scans
+
 ```powershell
-python scripts/auth_and_test_gmail.py --account account_1
+# Dry run across all 3 accounts (fetches candidates without calling LLM or writing to DB)
+python scripts\run_scan.py --all --limit 5 --dry-run
+
+# Live scan on transaction account (account_2)
+python scripts\run_scan.py --account account_2 --limit 10
+
+# Live scan across all 3 accounts
+python scripts\run_scan.py --all --limit 10
 ```
 
-### 4. Run an Email Ingestion Scan
+---
 
-```powershell
-# Dry run (fetches candidate IDs without calling LLM or writing to DB)
-python scripts/run_scan.py --account account_1 --limit 5 --dry-run
+### 4. Interactive Streamlit Dashboard
 
-# Live ingestion scan
-python scripts/run_scan.py --account account_1 --limit 10
-```
-
-### 5. Launch the Streamlit Dashboard
-
+Launch the local browser interface:
 ```powershell
 streamlit run app.py
 ```
-Views available in browser:
-- **💳 Transactions**: Inspect transactions, edit spending hints/categories inline, and link directly to Gmail messages.
-- **📊 Spending Reports**: Monthly totals, category charts, and top merchants.
-- **💼 Jobs & Interviews**: Job applications, interview date/times, and clickable video meeting links.
-- **⚙️ Accounts & Status**: Checkpoints and system status.
+- **💳 Transactions View**: Inspect extracted merchant, amount, card last-4; edit spending hints/categories inline with instant DB updates; link directly to Gmail messages.
+- **📊 Spending Reports View**: Real-time monthly spend, category distribution charts, and top merchants.
+- **💼 Jobs & Interviews View**: Track applications, upcoming interview dates/times with timezones, and one-click video meeting links (Zoom / Google Meet).
+- **⚙️ Accounts & Status**: Review connected accounts, last scan checkpoints, and model settings.
 
-### 6. Run Complete Test Suite
+---
+
+### 5. Nightly 10:00 PM Windows Task Scheduler
+
+Register the automated nightly scan:
+```powershell
+powershell -ExecutionPolicy Bypass -File scripts\setup_windows_scheduler.ps1
+```
+- Runs every night at **10:00 PM local time**.
+- **Missed-Run Catch-Up**: Configured with `StartWhenAvailable=$true` (if your laptop is asleep or powered off at 10:00 PM, Windows automatically runs the scan as soon as the machine boots or wakes up).
+- **Unregister anytime**:
+  ```powershell
+  powershell -ExecutionPolicy Bypass -File scripts\remove_windows_scheduler.ps1
+  ```
+
+---
+
+### 6. Database Backup & Disaster Recovery
+
+```powershell
+# Create an online point-in-time backup (safe while Streamlit is open)
+python scripts\backup_db.py --backup
+
+# List existing backups
+python scripts\backup_db.py --list
+
+# Restore from a backup file
+python scripts\backup_db.py --restore data\backups\email_agent_backup_YYYYMMDD_HHMMSS.db
+```
+
+---
+
+### 7. Revoking Access & Decommissioning
+
+To revoke Google OAuth access both server-side and delete local tokens:
+```powershell
+# Revoke a single account
+python scripts\revoke_access.py --account account_1
+
+# Revoke all accounts
+python scripts\revoke_access.py --all
+```
+You can also audit or revoke access at any time from your Google Account settings:
+👉 [Google Account Third-Party Permissions](https://myaccount.google.com/permissions)
+
+---
+
+### 8. Running the Complete Automated Test Suite
 
 ```powershell
 pytest
 ```
+*46 comprehensive unit and integration tests covering configuration, database, extraction, OAuth, multi-account isolation, failure recovery, logging, and UI.*
