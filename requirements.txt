@@ -1,0 +1,17 @@
+# Core Frameworks & LLM
+pydantic>=2.8.0
+pydantic-settings>=2.4.0
+langchain>=0.3.0
+langchain-groq>=0.2.0
+
+# Google OAuth & Gmail API (Read-Only)
+google-api-python-client>=2.140.0
+google-auth-httplib2>=0.2.0
+google-auth-oauthlib>=1.2.1
+
+# UI & Utilities
+streamlit>=1.38.0
+python-dotenv>=1.0.1
+
+# Testing & Dev
+pytest>=8.3.0
