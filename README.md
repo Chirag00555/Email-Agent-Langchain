@@ -1,8 +1,8 @@
 # Personal Gmail Analysis Assistant
 
 A private, controlled personal email intelligence system built with **Python**, **LangChain**, **Groq**, **SQLite**, and **Streamlit** to scan three personal Gmail accounts:
-- **Account 2** (`chirag.cj555@gmail.com`): Dedicated to credit-card transaction alerts and purchase notices.
-- **Account 1** (`jainchirag.cj555@gmail.com`) & **Account 3** (`chirag.work555@gmail.com`): Dedicated to job hunting, application confirmations, and interview scheduling.
+- **Account 2**: Dedicated to credit-card transaction alerts and purchase notices.
+- **Account 1** & **Account 3**: Dedicated to job hunting, application confirmations, and interview scheduling.
 
 ---
 

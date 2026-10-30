@@ -14,7 +14,7 @@ SAMPLE_EMAILS: List[Dict[str, Any]] = [
         "date": "2026-10-15T14:22:00Z",
         "account_type": "transactions",
         "body": """
-Hello Chirag,
+Hello Alex,
 
 A charge of $54.30 was authorized on your Sapphire card ending in 8821 at TRADER JOE'S #542 on October 15, 2026.
 
@@ -76,7 +76,7 @@ Reference code: POS-TX-9901.
         "date": "2026-10-22T16:00:00Z",
         "account_type": "jobs",
         "body": """
-Hi Chirag,
+Hi Alex,
 
 Thank you for your interest in the Senior Python Engineer role at TechCorp. We were very impressed by your background and would love to invite you for a 45-minute technical video screen.
 
@@ -123,7 +123,7 @@ Req ID: #AI-4091
         "date": "2026-10-24T12:00:00Z",
         "account_type": "jobs",
         "body": """
-Dear Chirag,
+Dear Alex,
 
 Thank you for taking the time to speak with our team regarding the Platform Engineer position at CloudScale Systems. While your background is impressive, we have decided to move forward with another candidate whose experience more closely matches our immediate needs.
 

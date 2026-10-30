@@ -29,7 +29,7 @@ def recovery_env(tmp_path):
     scanner = AccountScanner(
         account_id="account_2",
         account_type="transactions",
-        email_address="chirag.cj555@gmail.com",
+        email_address="user2.bank@example.com",
         settings=settings,
         db=db,
         gmail_client=mock_gmail,

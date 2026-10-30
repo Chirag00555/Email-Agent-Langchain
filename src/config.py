@@ -63,13 +63,13 @@ class Settings(BaseSettings):
     )
 
     # Account Specifics
-    account_1_email: Optional[str] = Field(default="jainchirag.cj555@gmail.com")
+    account_1_email: Optional[str] = Field(default=None)
     account_1_type: str = Field(default="jobs")
 
-    account_2_email: Optional[str] = Field(default="chirag.cj555@gmail.com")
+    account_2_email: Optional[str] = Field(default=None)
     account_2_type: str = Field(default="transactions")
 
-    account_3_email: Optional[str] = Field(default="chirag.work555@gmail.com")
+    account_3_email: Optional[str] = Field(default=None)
     account_3_type: str = Field(default="jobs")
 
     def ensure_directories(self) -> None:

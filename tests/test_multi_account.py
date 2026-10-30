@@ -26,9 +26,9 @@ def multi_db(tmp_path):
 
 def test_three_accounts_registration(multi_db):
     """Verify that all three accounts are registered with their designated types."""
-    multi_db.upsert_account("account_1", "jainchirag.cj555@gmail.com", "jobs")
-    multi_db.upsert_account("account_2", "chirag.cj555@gmail.com", "transactions")
-    multi_db.upsert_account("account_3", "chirag.work555@gmail.com", "jobs")
+    multi_db.upsert_account("account_1", "user1.jobs@example.com", "jobs")
+    multi_db.upsert_account("account_2", "user2.bank@example.com", "transactions")
+    multi_db.upsert_account("account_3", "user3.jobs@example.com", "jobs")
 
     accounts = multi_db.list_accounts()
     assert len(accounts) == 3
